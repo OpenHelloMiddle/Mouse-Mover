@@ -9,6 +9,7 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         arch: [x86, x86_64, arm, arm64, riscv64]
         include:
@@ -60,6 +61,7 @@ jobs:
   build-macos:
     runs-on: macos-latest
     strategy:
+      fail-fast: false
       matrix:
         arch: [x86_64, arm64]
         include:
@@ -85,17 +87,27 @@ jobs:
         path: ${{ matrix.artifact_name }}
 
   build-windows:
-    runs-on: windows-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
+      fail-fast: false
       matrix:
-        arch: [x86, x86_64]
         include:
           - arch: x86
             artifact_name: mouse-windows-x86.exe
             compiler: i686-w64-mingw32-gcc
+            runner: windows-latest
           - arch: x86_64
             artifact_name: mouse-windows-x86_64.exe
             compiler: x86_64-w64-mingw32-gcc
+            runner: windows-latest
+          - arch: arm
+            artifact_name: mouse-windows-arm.exe
+            compiler: armv7-w64-mingw32-gcc
+            runner: windows-latest
+          - arch: arm64
+            artifact_name: mouse-windows-arm64.exe
+            compiler: aarch64-w64-mingw32-gcc
+            runner: windows-latest
 
     steps:
     - name: Checkout code
@@ -104,10 +116,23 @@ jobs:
     - name: Install MinGW cross-compilers
       run: |
         choco install mingw --force -y
+        if ("${{ matrix.arch }}" -eq "arm" -or "${{ matrix.arch }}" -eq "arm64") {
+          Invoke-WebRequest -Uri "https://github.com/mstorsjo/llvm-mingw/releases/download/20231017/llvm-mingw-20231017-ucrt-x86_64.zip" -OutFile "llvm-mingw.zip"
+          Expand-Archive -Path "llvm-mingw.zip" -DestinationPath .
+          echo "C:\llvm-mingw\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+        }
 
     - name: Build for Windows ${{ matrix.arch }}
       run: |
-        ${{ matrix.compiler }} mouse.c -luser32 -O2 -o ${{ matrix.artifact_name }}
+        if ("${{ matrix.arch }}" -eq "arm" -or "${{ matrix.arch }}" -eq "arm64") {
+          $compiler = "aarch64-w64-mingw32-gcc"
+          if ("${{ matrix.arch }}" -eq "arm") {
+            $compiler = "armv7-w64-mingw32-gcc"
+          }
+          & $compiler mouse.c -luser32 -O2 -o ${{ matrix.artifact_name }}
+        } else {
+          ${{ matrix.compiler }} mouse.c -luser32 -O2 -o ${{ matrix.artifact_name }}
+        }
 
     - name: Upload Windows ${{ matrix.arch }} artifact
       uses: actions/upload-artifact@v4
@@ -118,6 +143,7 @@ jobs:
   build-android:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         arch: [x86, x86_64, arm, arm64, riscv64]
         include:
