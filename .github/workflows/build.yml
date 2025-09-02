@@ -40,8 +40,7 @@ jobs:
         sudo apt-get install -y \
           gcc-i686-linux-gnu \
           gcc-aarch64-linux-gnu \
-          gcc-arm-linux-gnueabi \
-          gcc-multilib
+          gcc-arm-linux-gnueabi
         sudo dpkg --add-architecture i386
         sudo dpkg --add-architecture armhf
         sudo dpkg --add-architecture arm64
@@ -102,16 +101,16 @@ jobs:
         include:
           - arch: x86
             artifact_name: mouse-windows-x86.exe
-            compiler: i686-w64-mingw32-gcc
+            compiler_path: C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin\i686-w64-mingw32-gcc.exe
           - arch: x86_64
             artifact_name: mouse-windows-x86_64.exe
-            compiler: x86_64-w64-mingw32-gcc
+            compiler_path: C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin\x86_64-w64-mingw32-gcc.exe
           - arch: arm
             artifact_name: mouse-windows-arm.exe
-            compiler: armv7-w64-mingw32-gcc
+            compiler_path: C:\llvm-mingw\bin\armv7-w64-mingw32-gcc.exe
           - arch: arm64
             artifact_name: mouse-windows-arm64.exe
-            compiler: aarch64-w64-mingw32-gcc
+            compiler_path: C:\llvm-mingw\bin\aarch64-w64-mingw32-gcc.exe
 
     steps:
     - name: Checkout code
@@ -122,21 +121,17 @@ jobs:
         choco install mingw --force -y
         $url = "https://github.com/mstorsjo/llvm-mingw/releases/download/20231017/llvm-mingw-20231017-ucrt-x86_64.zip"
         Invoke-WebRequest -Uri $url -OutFile "llvm-mingw.zip"
-        Expand-Archive -Path "llvm-mingw.zip" -DestinationPath "C:\llvm-mingw"
+        Expand-Archive -Path "llvm-mingw.zip" -DestinationPath "C:\llvm-mingw" -Force
         echo "C:\llvm-mingw\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 
     - name: Build for Windows ${{ matrix.arch }}
       run: |
-        if ("${{ matrix.arch }}" -eq "arm" -or "${{ matrix.arch }}" -eq "arm64") {
-          $compiler = "C:\llvm-mingw\bin\aarch64-w64-mingw32-gcc.exe"
-          if ("${{ matrix.arch }}" -eq "arm") {
-            $compiler = "C:\llvm-mingw\bin\armv7-w64-mingw32-gcc.exe"
-          }
-          & $compiler mouse.c -luser32 -O2 -o ${{ matrix.artifact_name }}
+        if (Test-Path "${{ matrix.compiler_path }}") {
+          & "${{ matrix.compiler_path }}" mouse.c -luser32 -O2 -o ${{ matrix.artifact_name }}
+          Write-Host "Build for ${{ matrix.arch }} completed successfully."
         } else {
-          $compiler = "${{ matrix.compiler }}"
-          & $compiler mouse.c -luser32 -O2 -o ${{ matrix.artifact_name }}
+          Write-Error "Compiler for ${{ matrix.arch }} not found at: ${{ matrix.compiler_path }}"
+          exit 1
         }
 
     - name: Upload Windows ${{ matrix.arch }} artifact
