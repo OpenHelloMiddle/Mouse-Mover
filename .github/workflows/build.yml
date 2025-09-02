@@ -1,4 +1,4 @@
-name: Build Mouse Mover with Clang
+name: Build Mouse Mover
 
 on:
   push:
@@ -6,53 +6,156 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
+  build-linux:
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        arch: [x86, x86_64, arm, arm64, riscv64]
         include:
-          - os: ubuntu-latest
-            artifact_name: mouse-linux
-          - os: macos-latest
-            artifact_name: mouse-macos
-          - os: windows-latest
-            artifact_name: mouse.exe
+          - arch: x86
+            artifact_name: mouse-linux-x86
+            compiler: i686-linux-gnu-gcc
+            flags: -lX11 -lXtst -static
+          - arch: x86_64
+            artifact_name: mouse-linux-x86_64
+            compiler: gcc
+            flags: -lX11 -lXtst
+          - arch: arm
+            artifact_name: mouse-linux-arm
+            compiler: arm-linux-gnueabi-gcc
+            flags: -lX11 -lXtst -static
+          - arch: arm64
+            artifact_name: mouse-linux-arm64
+            compiler: aarch64-linux-gnu-gcc
+            flags: -lX11 -lXtst -static
+          - arch: riscv64
+            artifact_name: mouse-linux-riscv64
+            compiler: riscv64-linux-gnu-gcc
+            flags: -lX11 -lXtst -static
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
-    - name: Set up Clang on Linux
-      if: matrix.os == 'ubuntu-latest'
+    - name: Install cross-compilation tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang libx11-dev libxtst-dev
+        sudo apt-get install -y \
+          gcc-i686-linux-gnu \
+          gcc-aarch64-linux-gnu \
+          gcc-arm-linux-gnueabi \
+          gcc-riscv64-linux-gnu \
+          libx11-dev libxtst-dev
 
-    - name: Build on Linux
-      if: matrix.os == 'ubuntu-latest'
+    - name: Build for Linux ${{ matrix.arch }}
       run: |
-        clang -o mouse mouse.c -lX11 -lXtst -Os -s
-        strip mouse
+        ${{ matrix.compiler }} -o ${{ matrix.artifact_name }} mouse.c ${{ matrix.flags }} -Os -s
 
-    - name: Build on macOS
-      if: matrix.os == 'macos-latest'
-      run: |
-        clang -o mouse mouse.c -framework ApplicationServices -Os -s
-
-    - name: Set up Clang on Windows
-      if: matrix.os == 'windows-latest'
-      uses: llvm/actions/setup-llvm@v1
-      with:
-        version: 'latest'
-
-    - name: Build on Windows
-      if: matrix.os == 'windows-latest'
-      run: |
-        clang mouse.c -luser32 -O2 -o mouse.exe
-
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+    - name: Upload Linux ${{ matrix.arch }} artifact
+      uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.artifact_name }}
-        path: mouse*
+        path: ${{ matrix.artifact_name }}
+
+  build-macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [x86_64, arm64]
+        include:
+          - arch: x86_64
+            artifact_name: mouse-macos-x86_64
+            flags: -arch x86_64
+          - arch: arm64
+            artifact_name: mouse-macos-arm64
+            flags: -arch arm64
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Build for macOS ${{ matrix.arch }}
+      run: |
+        gcc ${{ matrix.flags }} -o ${{ matrix.artifact_name }} mouse.c -framework ApplicationServices -Os -s
+
+    - name: Upload macOS ${{ matrix.arch }} artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact_name }}
+        path: ${{ matrix.artifact_name }}
+
+  build-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [x86, x86_64]
+        include:
+          - arch: x86
+            artifact_name: mouse-windows-x86.exe
+            compiler: i686-w64-mingw32-gcc
+          - arch: x86_64
+            artifact_name: mouse-windows-x86_64.exe
+            compiler: x86_64-w64-mingw32-gcc
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install MinGW cross-compilers
+      run: |
+        choco install mingw --force -y
+
+    - name: Build for Windows ${{ matrix.arch }}
+      run: |
+        ${{ matrix.compiler }} mouse.c -luser32 -O2 -o ${{ matrix.artifact_name }}
+
+    - name: Upload Windows ${{ matrix.arch }} artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact_name }}
+        path: ${{ matrix.artifact_name }}
+
+  build-android:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x86, x86_64, arm, arm64, riscv64]
+        include:
+          - arch: x86
+            artifact_name: mouse-android-x86
+            compiler: i686-linux-android30-clang
+          - arch: x86_64
+            artifact_name: mouse-android-x86_64
+            compiler: x86_64-linux-android30-clang
+          - arch: arm
+            artifact_name: mouse-android-arm
+            compiler: armv7a-linux-androideabi30-clang
+          - arch: arm64
+            artifact_name: mouse-android-arm64
+            compiler: aarch64-linux-android30-clang
+          - arch: riscv64
+            artifact_name: mouse-android-riscv64
+            compiler: riscv64-linux-android30-clang
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Android NDK
+      uses: android-actions/setup-android@v1
+
+    - name: Set up Android build environment
+      run: |
+        echo "ANDROID_NDK_HOME=$ANDROID_NDK_ROOT" >> $GITHUB_ENV
+        echo "$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+
+    - name: Build for Android ${{ matrix.arch }}
+      run: |
+        $ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/${{ matrix.compiler }} \
+          -o ${{ matrix.artifact_name }} mouse.c -Os -static
+
+    - name: Upload Android ${{ matrix.arch }} artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact_name }}
+        path: ${{ matrix.artifact_name }}
