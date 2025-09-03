@@ -12,7 +12,6 @@
 #else
 #include <X11/Xlib.h>
 #include <X11/extensions/XTest.h>
-#include <unistd.h>
 #define OS_LINUX
 #endif
 
@@ -171,6 +170,7 @@ int main(int argc, char* argv[]) {
     int x = 0, y = 0;
     int is_relative_x = 0, is_relative_y = 0;
     int has_x = 0, has_y = 0;
+
     if (argc == 2 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {
         print_usage(argv[0]);
         return 0;
