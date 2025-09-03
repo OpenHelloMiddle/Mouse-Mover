@@ -69,12 +69,17 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Setup MinGW
+      uses: egor-tensin/setup-mingw@v1
+      with:
+        platform: ${{ matrix.arch }}
+
     - name: Build for Windows ${{ matrix.arch }}
       run: |
         if [ "${{ matrix.arch }}" = "x86" ]; then
-          cl mouse.c /link user32.lib /O2 /Fe:mouse-windows-x86.exe
+          i686-w64-mingw32-gcc -o mouse-windows-x86.exe mouse.c -luser32 -Os -s
         else
-          cl mouse.c /link user32.lib /O2 /Fe:mouse-windows-x86_64.exe
+          x86_64-w64-mingw32-gcc -o mouse-windows-x86_64.exe mouse.c -luser32 -Os -s
         fi
 
     - name: Upload Windows binary
@@ -82,20 +87,3 @@ jobs:
       with:
         name: mouse-windows-${{ matrix.arch }}
         path: mouse-windows-${{ matrix.arch }}.exe
-
-  create-release:
-    needs: [build-linux, build-macos, build-windows]
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-
-    steps:
-    - name: Download all artifacts
-      uses: actions/download-artifact@v4
-      with:
-        path: artifacts
-
-    - name: Create Release
-      uses: softprops/action-gh-release@v1
-      with:
-        files: |
-          artifacts/**/*
