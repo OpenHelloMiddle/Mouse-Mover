@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        arch: [x86, x86_64]
+        arch: [x64]
 
     steps:
     - name: Checkout code
@@ -19,27 +19,27 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libx11-dev libxtst-dev clang gcc-multilib
+        sudo apt-get install -y libx11-dev libxtst-dev clang
 
     - name: Build for Linux ${{ matrix.arch }}
       run: |
-        if [ "${{ matrix.arch }}" = "x86" ]; then
-          clang -m32 -o mouse-linux-x86 mouse.c -lX11 -lXtst -Os -s
+        if [ "${{ matrix.arch }}" = "arm64" ]; then
+          clang -o mouse-${{ matrix.arch }} mouse.c -lX11 -lXtst -Os -s --target=aarch64-linux-gnu
         else
-          clang -m64 -o mouse-linux-x86_64 mouse.c -lX11 -lXtst -Os -s
+          clang -o mouse-${{ matrix.arch }} mouse.c -lX11 -lXtst -Os -s
         fi
 
     - name: Upload Linux binary
       uses: actions/upload-artifact@v4
       with:
         name: mouse-linux-${{ matrix.arch }}
-        path: mouse-linux-${{ matrix.arch }}
+        path: mouse-${{ matrix.arch }}
 
   build-macos:
     runs-on: macos-latest
     strategy:
       matrix:
-        arch: [x86_64, arm64]
+        arch: [x64, arm64]
 
     steps:
     - name: Checkout code
@@ -48,42 +48,33 @@ jobs:
     - name: Build for macOS ${{ matrix.arch }}
       run: |
         if [ "${{ matrix.arch }}" = "arm64" ]; then
-          clang -o mouse-macos-arm64 mouse.c -framework ApplicationServices -Os -s -arch arm64
+          clang -o mouse-arm64 mouse.c -framework ApplicationServices -Os -s -arch arm64
         else
-          clang -o mouse-macos-x86_64 mouse.c -framework ApplicationServices -Os -s -arch x86_64
+          clang -o mouse-x64 mouse.c -framework ApplicationServices -Os -s -arch x86_64
         fi
 
     - name: Upload macOS binary
       uses: actions/upload-artifact@v4
       with:
         name: mouse-macos-${{ matrix.arch }}
-        path: mouse-macos-${{ matrix.arch }}
+        path: mouse-${{ matrix.arch }}
 
   build-windows:
     runs-on: windows-latest
-    strategy:
-      matrix:
-        arch: [x86, x86_64]
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup MinGW
-      uses: egor-tensin/setup-mingw@v1
-      with:
-        platform: ${{ matrix.arch }}
+    - name: Set up MSVC
+      uses: ilammy/msvc-dev-cmd@v1
 
-    - name: Build for Windows ${{ matrix.arch }}
+    - name: Build for Windows
       run: |
-        if [ "${{ matrix.arch }}" = "x86" ]; then
-          i686-w64-mingw32-gcc -o mouse-windows-x86.exe mouse.c -luser32 -Os -s
-        else
-          x86_64-w64-mingw32-gcc -o mouse-windows-x86_64.exe mouse.c -luser32 -Os -s
-        fi
+        cl mouse.c /link user32.lib /O2 /Fe:mouse.exe
 
     - name: Upload Windows binary
       uses: actions/upload-artifact@v4
       with:
-        name: mouse-windows-${{ matrix.arch }}
-        path: mouse-windows-${{ matrix.arch }}.exe
+        name: mouse-windows-x64
+        path: mouse.exe
