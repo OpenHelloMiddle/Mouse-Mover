@@ -2,64 +2,35 @@ name: Build mouse.c
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   build-linux:
     strategy:
       matrix:
-        arch: [x64, x86, arm64, arm]
-        compiler: [gcc, clang]
-        exclude:
-          - arch: arm64
-            compiler: clang
-          - arch: arm
-            compiler: clang
+        arch: [x64, x86]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up compiler
-      run: |
-        if [ "${{ matrix.compiler }}" = "gcc" ]; then
-          sudo apt-get update
-          sudo apt-get install gcc-multilib g++-multilib
-          echo "CC=gcc" >> $GITHUB_ENV
-        else
-          sudo apt-get update
-          sudo apt-get install clang
-          echo "CC=clang" >> $GITHUB_ENV
-        fi
+    - name: Install X11 dependencies
+      run: sudo apt-get update && sudo apt-get install -y libx11-dev libxtst-dev
 
     - name: Build for ${{ matrix.arch }}
       run: |
-        # Set architecture-specific flags
-        case "${{ matrix.arch }}" in
-          x64)
-            CFLAGS=""
-            ;;
-          x86)
-            CFLAGS="-m32"
-            ;;
-          arm64)
-            sudo apt-get install gcc-aarch64-linux-gnu
-            export CC=aarch64-linux-gnu-gcc
-            ;;
-          arm)
-            sudo apt-get install gcc-arm-linux-gnueabihf
-            export CC=arm-linux-gnueabihf-gcc
-            ;;
-        esac
-
-        $CC $CFLAGS mouse.c -o mouse-${{ matrix.arch }}-${{ matrix.compiler }} -lm
+        if [ "${{ matrix.arch }}" = "x86" ]; then
+          sudo apt-get install -y gcc-multilib
+          CFLAGS="-m32"
+        fi
+        gcc $CFLAGS mouse.c -o mouse-linux-${{ matrix.arch }} -lX11 -lXtst -lm
 
     - name: Upload Linux artifact
       uses: actions/upload-artifact@v4
       with:
-        name: linux-${{ matrix.arch }}-${{ matrix.compiler }}
-        path: mouse-${{ matrix.arch }}-${{ matrix.compiler }}
+        name: linux-${{ matrix.arch }}
+        path: mouse-linux-${{ matrix.arch }}
 
   build-macos:
     strategy:
@@ -71,59 +42,47 @@ jobs:
 
     - name: Build for ${{ matrix.arch }}
       run: |
-        # Set architecture flag
         if [ "${{ matrix.arch }}" = "arm64" ]; then
           ARCH_FLAGS="-arch arm64"
         else
           ARCH_FLAGS="-arch x86_64"
         fi
 
-        clang $ARCH_FLAGS mouse.c -o mouse-${{ matrix.arch }} -lm
+        clang $ARCH_FLAGS mouse.c -o mouse-macos-${{ matrix.arch }} -framework CoreGraphics -framework CoreFoundation -framework IOKit
 
     - name: Upload macOS artifact
       uses: actions/upload-artifact@v4
       with:
         name: macos-${{ matrix.arch }}
-        path: mouse-${{ matrix.arch }}
+        path: mouse-macos-${{ matrix.arch }}
 
   build-windows:
     strategy:
       matrix:
-        compiler: [msvc, mingw]
         arch: [x64, x86]
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4
 
+    - name: Setup MSVC
+      uses: ilammy/setup-msvc@v1
+      with:
+        arch: ${{ matrix.arch }}
+
     - name: Build with MSVC
-      if: matrix.compiler == 'msvc'
-      run: |
-        cl mouse.c /Fe:mouse-${{ matrix.arch }}-msvc.exe
-      shell: cmd
-
-    - name: Setup MinGW
-      if: matrix.compiler == 'mingw'
-      run: choco install mingw -y
-
-    - name: Build with MinGW
-      if: matrix.compiler == 'mingw'
-      run: |
-        if "${{ matrix.arch }}" == "x86" (
-          set CFLAGS=-m32
-        )
-        gcc %CFLAGS% mouse.c -o mouse-${{ matrix.arch }}-mingw.exe -lm
+      run: cl mouse.c /Fe:mouse-windows-${{ matrix.arch }}.exe user32.lib gdi32.lib
       shell: cmd
 
     - name: Upload Windows artifact
       uses: actions/upload-artifact@v4
       with:
-        name: windows-${{ matrix.arch }}-${{ matrix.compiler }}
-        path: mouse-${{ matrix.arch }}-${{ matrix.compiler }}.exe
+        name: windows-${{ matrix.arch }}
+        path: mouse-windows-${{ matrix.arch }}.exe
 
   build-android:
     strategy:
       matrix:
-        arch: [arm64-v8a, armeabi-v7a, x86, x86_64]
+        arch: [arm64-v8a, armeabi-v7a]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -135,25 +94,18 @@ jobs:
 
     - name: Build for Android ${{ matrix.arch }}
       run: |
-        # Set target based on architecture
         case "${{ matrix.arch }}" in
           arm64-v8a)
             TARGET=aarch64-linux-android
+            API=21
             ;;
           armeabi-v7a)
             TARGET=armv7a-linux-androideabi
-            ;;
-          x86)
-            TARGET=i686-linux-android
-            ;;
-          x86_64)
-            TARGET=x86_64-linux-android
+            API=16
             ;;
         esac
 
-        CLANG_PATH=$(find $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin -name "$TARGET*-clang" | head -1)
-
-        $CLANG_PATH --target=$TARGET mouse.c -o mouse-android-${{ matrix.arch }} -lm
+        $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/${TARGET}${API}-clang mouse.c -o mouse-android-${{ matrix.arch }} -lm
 
     - name: Upload Android artifact
       uses: actions/upload-artifact@v4
