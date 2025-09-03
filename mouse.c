@@ -1,22 +1,3 @@
-/*
- * This file is part of OpenHelloMiddle.
- *
- * OpenHelloMiddle is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * OpenHelloMiddle is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenHelloMiddle.  If not, see <https://www.gnu.org/licenses/>.
- *
- * Copyright (C) 2025 OpenHelloMiddle
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,9 +9,6 @@
 #elif defined(__APPLE__)
 #include <ApplicationServices/ApplicationServices.h>
 #define OS_MACOS
-#elif defined(__ANDROID__)
-#include <unistd.h>
-#define OS_ANDROID
 #else
 #include <X11/Xlib.h>
 #include <X11/extensions/XTest.h>
@@ -40,24 +18,30 @@
 
 int parse_value(const char* arg, const char* prefix, int current, int* is_relative, int* has_value) {
     if (strstr(arg, prefix) != arg) return current;
+
     const char* value_str = arg + strlen(prefix);
     *has_value = 1;
+
     if (strlen(value_str) == 0) {
         *is_relative = 0;
         return current;
     }
+
     if (strcmp(value_str, "+") == 0) {
         *is_relative = 1;
         return 1;
     }
+
     if (strcmp(value_str, "-") == 0) {
         *is_relative = 1;
         return -1;
     }
+
     if ((value_str[0] == '+' || value_str[0] == '-') && isdigit(value_str[1])) {
         *is_relative = 1;
         return atoi(value_str);
     }
+
     if (isdigit(value_str[0]) || (value_str[0] == '-' && isdigit(value_str[1]))) {
         *is_relative = 0;
         return atoi(value_str);
@@ -85,9 +69,6 @@ void get_screen_size(int* width, int* height) {
         *width = 1920;
         *height = 1080;
     }
-    #else
-    *width = 1920;
-    *height = 1080;
     #endif
 }
 
@@ -130,9 +111,12 @@ void get_mouse_position(int* x, int* y) {
 
 void move_mouse(int x, int y, int is_relative_x, int is_relative_y, int has_x, int has_y) {
     int cur_x, cur_y;
+
     get_mouse_position(&cur_x, &cur_y);
+
     int new_x = has_x ? (is_relative_x ? cur_x + x : x) : cur_x;
     int new_y = has_y ? (is_relative_y ? cur_y + y : y) : cur_y;
+
     int width, height;
     get_screen_size(&width, &height);
     if (new_x < 0) new_x = 0;
@@ -150,16 +134,12 @@ void move_mouse(int x, int y, int is_relative_x, int is_relative_y, int has_x, i
     CGEventPost(kCGHIDEventTap, move);
     CFRelease(move);
 
-    #elif defined(OS_ANDROID)
-    char command[256];
-    snprintf(command, sizeof(command), "su -c 'input mouse move %d %d'", new_x - cur_x, new_y - cur_y);
-    system(command);
-
     #elif defined(OS_LINUX)
     Display* display = XOpenDisplay(NULL);
     if (!display) {
         return;
     }
+
     XTestFakeMotionEvent(display, 0, new_x, new_y, CurrentTime);
     XFlush(display);
     XCloseDisplay(display);
@@ -195,10 +175,13 @@ int main(int argc, char* argv[]) {
         print_usage(argv[0]);
         return 0;
     }
+
     for (int i = 1; i < argc; i++) {
         x = parse_value(argv[i], "-x=", x, &is_relative_x, &has_x);
         y = parse_value(argv[i], "-y=", y, &is_relative_y, &has_y);
     }
+
     move_mouse(x, y, is_relative_x, is_relative_y, has_x, has_y);
+
     return 0;
 }
